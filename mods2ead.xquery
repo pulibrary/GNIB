@@ -140,7 +140,7 @@ as element()
         <langmaterial>
         { 
         for $lang in $mrec/mods:language/mods:languageTerm
-        return <language>{ $lang/text() }</language>
+        return <language langcode="{ $lang/text() }" />
         }
         </langmaterial>
      
@@ -148,8 +148,9 @@ as element()
     </did>
     <controlaccess>
     {
-      for $subject in $mrec//mods:subject return <subject>{string-join($subject/child::*/text(), '--')}</subject>
+      for $subject in $mrec//mods:subject return <subject>{string-join($subject/child::*/text(), ' -- ')}</subject>
     }
+    <genreform source="aat">ephemera</genreform>
     </controlaccess>
 
     </c>
