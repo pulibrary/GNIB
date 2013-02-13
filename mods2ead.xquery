@@ -6,14 +6,21 @@ declare namespace xlink="http://www.w3.org/1999/xlink";
 declare namespace util="http://exist-db.org/xquery/util";
 declare namespace xmldb="http://exist-db.org/xquery/xmldb";
 
-declare variable $dbroot := "/db/gnib/mdata/ephemera";
-(: declare variable $callno := "F1466.7.C584"; :)
+(: declare variable $dbroot := "/db/gnib/mdata/ephemera"; :)
+declare variable $dbroot := "/db/gnib/ephemera";
+
 declare variable $callno := "LAE107";
 
-declare function local:gnib-unit($id as xs:string)
+declare function local:gnib-unit-old($id as xs:string)
 as element()?
 {
 doc('/db/gnib/gnib.ead.xml')//ead:c[ead:did/ead:unitid = $id]
+};
+
+declare function local:gnib-unit($ead as element(), $id as xs:string)
+as element()?
+{
+$ead//ead:c[ead:did/ead:unitid = $id]
 };
 
 declare function local:mods2did($mods as element())
@@ -21,7 +28,7 @@ as element()*
 {
 let $unittitles := for $x in $mods/mods:titleInfo return local:titleInfo2unittitle($x)
 let $names      := for $x in $mods/mods:name      return local:name2origination($x)
-return <did>{$unittitles,$names}</did>
+return <ead:did>{$unittitles,$names}</ead:did>
  
 };
 
@@ -41,40 +48,19 @@ as element()*
  		for $title in $titleInfo/mods:title
  		where $title/text()
  	 	return 
- 	 	<title>{$title/text()}</title>
+ 	 	<ead:title>{$title/text()}</ead:title>
  let $subtitles := 
  		for $title in $titleInfo/mods:subTitle
  		where $title/text()
  	 	return 
- 	 	<title type='subtitle'>{$title/text()}</title>
+ 	 	<ead:title type='subtitle'>{$title/text()}</ead:title>
  	return
  		if ($titles)
- 			then <unittitle>{$titles, $subtitles}</unittitle>
+ 			then <ead:unittitle>{$titles, $subtitles}</ead:unittitle>
  		else ()
 };
 
-declare function local:name2origination-old($name as element())
-as element()*
-{
-	let $parts     := $name/mods:namePart/text()
-	let $corpname  := $name[@type='corporate']/mods:namePart/text()
-	let $famname   := $name[@type='personal']/mods:namePart[@type='family']/text()
-	let $givname   := $name[@type='personal']/mods:namePart[@type='given']/text()
-	let $normname  := fn:string-join(($famname, $givname), ', ')
-	return
-		if ($parts) 
-			then 
-			<origination> {
-			if ($name/@type='corporate')
-			  then 
-			  	<corpname role = "{$name/mods:role/mods:roleTerm/text()}">{$corpname}</corpname>
-			  else
-			  	<persname role = "{$name/mods:role/mods:roleTerm/text()}">
-			  		{$normname}
-			  	</persname>
-			}</origination>
-		else ()
-};
+
 declare function local:name2origination($name as element())
 as element()*
 {
@@ -89,11 +75,11 @@ as element()*
 
 			if ($name/@type='corporate')
 			  then 
-			  	<corpname role = "{$name/mods:role/mods:roleTerm/text()}">{$corpname}</corpname>
+			  	<ead:corpname role = "{$name/mods:role/mods:roleTerm/text()}">{$corpname}</ead:corpname>
 			  else
-			  	<persname role = "{$name/mods:role/mods:roleTerm/text()}">
+			  	<ead:persname role = "{$name/mods:role/mods:roleTerm/text()}">
 			  		{$normname}
-			  	</persname>
+			  	</ead:persname>
 
 		else ()
 };
@@ -110,11 +96,13 @@ as element()
         else ()
     let $publishers   := $mrec/mods:originInfo/mods:publisher
     let $unittitles := for $x in $mrec/mods:titleInfo return local:titleInfo2unittitle($x)
+    let $unitdate   :=
+                   if (not(empty($ndate))) then <ead:unitdate normal="{$ndate}">{ $date }</ead:unitdate> else <ead:unitdate>{ $date }</ead:unitdate>
     let $names      := for $x in $mrec/mods:name      return local:name2origination($x)
-    let $notes := if ($mrec/mods:note) then
-                    <note>{ for $n in $mrec/mods:note 
+    let $notes := if ($mrec/mods:note[./text() != "Document extracted from:"]) then
+                    <ead:note>{ for $n in $mrec/mods:note 
                     where $n/text() != "Document extracted from:"
-                    return <p>{ concat($n/text(), '.') }</p> }</note>
+                    return <ead:p>{ concat($n/text(), '.') }</ead:p> }</ead:note>
                    else ()
     
     
@@ -123,7 +111,7 @@ as element()
       <did>
         { $unittitles }
 
-        <unitdate normal="{$ndate}">{ $date }</unitdate>
+        { $unitdate }
     
         <origination>
         {
@@ -146,6 +134,7 @@ as element()
      
         <dao xlink:type="simple" xlink:role="http://www.loc.gov/METS/" xlink:href="{ replace($mrec//mods:recordIdentifier/text(), "^(.*)\.mods", "$1.mets") }"/>
     </did>
+
     <controlaccess>
     {
       for $subject in $mrec//mods:subject return <subject>{string-join($subject/child::*/text(), ' -- ')}</subject>
@@ -176,14 +165,14 @@ for $subseries in xmldb:get-child-collections($dbroot) order by $subseries
 return
 
 <c level="subseries">
-{ local:gnib-unit($subseries)/ead:did }
-{ local:gnib-unit($subseries)/ead:scopecontent }
+{ local:gnib-unit($oldead, $subseries)/ead:did }
+{ local:gnib-unit($oldead, $subseries)/ead:scopecontent }
 
 {
 for $file in xmldb:get-child-collections(concat($dbroot, '/', $subseries)) order by $file
 return 
 <c level="file">
-{ local:gnib-unit($file)/ead:did }
+{ local:gnib-unit($oldead, $file)/ead:did }
 <dsc>
 {
 for $item at $pos in collection(concat($dbroot, '/', $subseries, '/', $file))//mods:mods
@@ -199,9 +188,11 @@ return local:mods2component($item, $cid)
 }
 </c>
 <!-- End of computed section. -->
+
 { $oldead/archdesc/dsc/c[@level='series'][2] }
 { $oldead/archdesc/dsc/c[@level='series'][3] }
 { $oldead/archdesc/dsc/c[@level='series'][4] }
+
 </dsc>
 </archdesc>
 </ead>
