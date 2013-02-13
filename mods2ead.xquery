@@ -11,12 +11,6 @@ declare variable $dbroot := "/db/gnib/ephemera";
 
 declare variable $callno := "LAE107";
 
-declare function local:gnib-unit-old($id as xs:string)
-as element()?
-{
-doc('/db/gnib/gnib.ead.xml')//ead:c[ead:did/ead:unitid = $id]
-};
-
 declare function local:gnib-unit($ead as element(), $id as xs:string)
 as element()?
 {
@@ -41,7 +35,7 @@ as xs:string
     return concat($prefix, $id)
 };
 
-declare function local:titleInfo2unittitle($titleInfo as element()+)
+declare function local:titleInfo2unittitle-old($titleInfo as element()+)
 as element()*
 {
  let $titles := 
@@ -60,6 +54,20 @@ as element()*
  		else ()
 };
 
+declare function local:titleInfo2unittitle($titleInfo as element()+)
+as element()*
+{
+
+ let $tstrings := 
+  for $ti in $titleInfo 
+  let $titles := for $t in $ti/mods:title return normalize-space($t/text())
+  let $subtitles := for $t in $ti/mods:subTitle return normalize-space($t/text())
+  return string-join(($titles, $subtitles), " : ")
+  
+ return <ead:unittitle>{ string-join($tstrings, " ; ") }</ead:unittitle>
+};
+
+
 
 declare function local:name2origination($name as element())
 as element()*
@@ -75,9 +83,9 @@ as element()*
 
 			if ($name/@type='corporate')
 			  then 
-			  	<ead:corpname role = "{$name/mods:role/mods:roleTerm/text()}">{$corpname}</ead:corpname>
+			  	<ead:corpname source="local" role = "{$name/mods:role/mods:roleTerm/text()}">{$corpname}</ead:corpname>
 			  else
-			  	<ead:persname role = "{$name/mods:role/mods:roleTerm/text()}">
+			  	<ead:persname source="local" role = "{$name/mods:role/mods:roleTerm/text()}">
 			  		{$normname}
 			  	</ead:persname>
 
@@ -137,7 +145,9 @@ as element()
 
     <controlaccess>
     {
-      for $subject in $mrec//mods:subject return <subject>{string-join($subject/child::*/text(), ' -- ')}</subject>
+      for $subject in $mrec//mods:subject 
+      let $auth := if ($subject/@authority) then $subject/@authority else "local"
+      return <subject source="{ $auth }">{string-join($subject/child::*/text(), ' -- ')}</subject>
     }
     <genreform source="aat">ephemera</genreform>
     </controlaccess>
@@ -165,22 +175,29 @@ for $subseries in xmldb:get-child-collections($dbroot) order by $subseries
 return
 
 <c level="subseries">
-{ local:gnib-unit($oldead, $subseries)/ead:did }
+{ 
+ let $did := local:gnib-unit($oldead, $subseries)/ead:did
+ return if ($did) then $did else <did><unittitle>UNSPECIFIED</unittitle></did>
+}
+
 { local:gnib-unit($oldead, $subseries)/ead:scopecontent }
 
 {
 for $file in xmldb:get-child-collections(concat($dbroot, '/', $subseries)) order by $file
 return 
 <c level="file">
-{ local:gnib-unit($oldead, $file)/ead:did }
-<dsc>
+{ 
+ let $did := local:gnib-unit($oldead, $file)/ead:did
+ return if ($did) then $did else <did><unittitle>UNSPECIFIED</unittitle></did>
+}
+
 {
 for $item at $pos in collection(concat($dbroot, '/', $subseries, '/', $file))//mods:mods
 (: let $cid := concat($callno,'_c',$subseries,$file,$pos) :)
 let $cid := local:component-id($subseries,$file,$pos)
 return local:mods2component($item, $cid)
 }
-</dsc>
+
 </c>
 }
 </c>
