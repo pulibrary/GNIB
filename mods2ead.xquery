@@ -22,7 +22,7 @@ as element()*
 {
 let $unittitles := for $x in $mods/mods:titleInfo return local:titleInfo2unittitle($x)
 let $names      := for $x in $mods/mods:name      return local:name2origination($x)
-return <ead:did>{$unittitles,$names}</ead:did>
+return <did>{$unittitles,$names}</did>
  
 };
 
@@ -35,25 +35,6 @@ as xs:string
     return concat($prefix, $id)
 };
 
-declare function local:titleInfo2unittitle-old($titleInfo as element()+)
-as element()*
-{
- let $titles := 
- 		for $title in $titleInfo/mods:title
- 		where $title/text()
- 	 	return 
- 	 	<ead:title>{$title/text()}</ead:title>
- let $subtitles := 
- 		for $title in $titleInfo/mods:subTitle
- 		where $title/text()
- 	 	return 
- 	 	<ead:title type='subtitle'>{$title/text()}</ead:title>
- 	return
- 		if ($titles)
- 			then <ead:unittitle>{$titles, $subtitles}</ead:unittitle>
- 		else ()
-};
-
 declare function local:titleInfo2unittitle($titleInfo as element()+)
 as element()*
 {
@@ -62,11 +43,24 @@ as element()*
   for $ti in $titleInfo 
   let $titles := for $t in $ti/mods:title return normalize-space($t/text())
   let $subtitles := for $t in $ti/mods:subTitle return normalize-space($t/text())
-  return string-join(($titles, $subtitles), " : ")
+  return string-join(($titles, $subtitles), " ; ")
   
- return <ead:unittitle>{ string-join($tstrings, " ; ") }</ead:unittitle>
+ return <unittitle>{ string-join($tstrings, " ; ") }</unittitle>
 };
 
+
+declare function local:altTitleInfo2odd($titleInfo as element()+)
+as element()*
+{
+
+ let $tstrings := 
+  for $ti in $titleInfo 
+  let $titles := for $t in $ti/mods:title return normalize-space($t/text())
+  let $subtitles := for $t in $ti/mods:subTitle return normalize-space($t/text())
+  return string-join(($titles, $subtitles), " ; ")
+  
+ return <odd>alternate title: { string-join($tstrings, " ; ") }</odd>
+};
 
 
 declare function local:name2origination($name as element())
@@ -83,11 +77,11 @@ as element()*
 
 			if ($name/@type='corporate')
 			  then 
-			  	<ead:corpname source="local" role = "{$name/mods:role/mods:roleTerm/text()}">{$corpname}</ead:corpname>
+			  	<corpname source="local" role = "{$name/mods:role/mods:roleTerm/text()}">{$corpname}</corpname>
 			  else
-			  	<ead:persname source="local" role = "{$name/mods:role/mods:roleTerm/text()}">
+			  	<persname source="local" role = "{$name/mods:role/mods:roleTerm/text()}">
 			  		{$normname}
-			  	</ead:persname>
+			  	</persname>
 
 		else ()
 };
@@ -103,14 +97,15 @@ as element()
         else if ($date castable as xs:gYear) then xs:gYear($date)
         else ()
     let $publishers   := $mrec/mods:originInfo/mods:publisher
-    let $unittitles := for $x in $mrec/mods:titleInfo return local:titleInfo2unittitle($x)
+    let $unittitles := for $x in $mrec/mods:titleInfo[not(@type = 'alternative')] return local:titleInfo2unittitle($x)
+    let $odds       := for $x in $mrec/mods:titleInfo[@type='alternative'] return local:altTitleInfo2odd($x)
     let $unitdate   :=
-                   if (not(empty($ndate))) then <ead:unitdate normal="{$ndate}">{ $date }</ead:unitdate> else <ead:unitdate>{ $date }</ead:unitdate>
+                   if (not(empty($ndate))) then <unitdate normal="{$ndate}">{ $date }</unitdate> else <unitdate>{ $date }</unitdate>
     let $names      := for $x in $mrec/mods:name      return local:name2origination($x)
     let $notes := if ($mrec/mods:note[./text() != "Document extracted from:"]) then
-                    <ead:note>{ for $n in $mrec/mods:note 
+                    <note>{ for $n in $mrec/mods:note 
                     where $n/text() != "Document extracted from:"
-                    return <ead:p>{ concat($n/text(), '.') }</ead:p> }</ead:note>
+                    return <p>{ concat($n/text(), '.') }</p> }</note>
                    else ()
     
     
@@ -151,7 +146,7 @@ as element()
     }
     <genreform source="aat">ephemera</genreform>
     </controlaccess>
-
+    { $odds }
     </c>
 };
 
